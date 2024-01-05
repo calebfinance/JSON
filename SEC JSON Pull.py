@@ -2,13 +2,14 @@
 """
 
 SEC Filing Scraper
-@author: AdamGetbags
+@author: Calebfinance
 
 """
 
 # import modules
 import requests
 import pandas as pd
+import matplotlib.pyplot as plt
 
 # create request header
 headers = {'User-Agent': "caleb@409a.fyi"}
@@ -108,12 +109,13 @@ companyFacts.json()['facts']['us-gaap'].keys()
 companyFacts.json()['facts']['us-gaap']['AccountsPayable']
 companyFacts.json()['facts']['us-gaap']['Revenues']
 companyFacts.json()['facts']['us-gaap']['Assets']
+companyFacts.json()['facts']['us-gaap']['EarningsPerShareDiluted']
 
-# get company concept data - example is Assets as noted above
+# get company concept data - example is EPS as noted above
 companyConcept = requests.get(
     (
     f'https://data.sec.gov/api/xbrl/companyconcept/CIK{cik}'
-     f'/us-gaap/Assets.json'
+     f'/us-gaap/EarningsPerShareDiluted.json'
     ),
     headers=headers
     )
@@ -122,23 +124,62 @@ companyConcept = requests.get(
 companyConcept.json().keys()
 companyConcept.json()['units']
 companyConcept.json()['units'].keys()
-companyConcept.json()['units']['USD']
-companyConcept.json()['units']['USD'][0]
+companyConcept.json()['units']['USD/shares']
+companyConcept.json()['units']['USD/shares'][0]
 
 # parse assets from single filing
-companyConcept.json()['units']['USD'][0]['val']
+companyConcept.json()['units']['USD/shares'][0]['val']
 
 # get all assets data for all time periods
 assetsData = pd.DataFrame.from_dict((
-               companyConcept.json()['units']['USD']))
+               companyConcept.json()['units']['USD/shares']))
 
 # review data
 assetsData.columns
 assetsData.form
 
-# get assets from 10Q forms and reset index
-assets10Q = assetsData[assetsData.form == '10-Q']
-assets10Q = assets10Q.reset_index(drop=True)
+# get assets from 10K forms and reset index
+assets10K = assetsData[assetsData.form == '10-K']
+assets10K = assets10K.reset_index(drop=True)
+
+#created CSV to review the output
+csv_file_path = "assets10K.csv"
+# Save the DataFrame to a CSV file
+assets10K.to_csv(csv_file_path, index=False)  # Set index=False to exclude the index column
+print(f"CSV file will be saved at: {csv_file_path}")
+
+# Generate a list of desired year values from 'CY2009' to 'CY2023'
+desired_years = [f'CY{i}' for i in range(2009, 2024)]
+
+# Filter the DataFrame based on the "frame" column
+assets10K_filtered = assets10K[assets10K['frame'].isin(desired_years)]
+
+# Reset the index and drop the old index column
+assets10K_filtered = assets10K_filtered.reset_index(drop=True)
+
+# Now, assets10K_filtered contains only the rows with the desired "frame" values from CY2009 to CY2023.
 
 # plot 
-assets10Q.plot(x='end', y='val')
+assets10K_filtered.plot(x='end', y='val')
+
+assets10K_filtered.sort_values(by='end', ascending=True, inplace=True)
+
+# Slice the DataFrame to select the last 12 years
+assets_last_12_years = assets10K_filtered.tail(12)
+
+# Assuming your DataFrame is named assets_last_12_years
+plt.figure(figsize=(12, 6))
+
+# Create a bar chart with "end" as x-axis and "val" as the height of the bars
+plt.bar(assets_last_12_years['end'], assets_last_12_years['val'], color='skyblue', alpha=0.7)
+
+# Add data labels on top of each bar
+for i, val in enumerate(assets_last_12_years['val']):
+    plt.text(assets_last_12_years['end'].iloc[i], val, str(val), ha='center', va='bottom')
+
+plt.xticks(rotation=45)
+plt.xlabel('Fiscal Year')
+plt.ylabel('EPS')
+plt.title('Last 12 Years of Data')
+plt.grid(True)
+plt.show()
